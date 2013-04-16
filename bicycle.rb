@@ -1424,6 +1424,7 @@ p b.schedulable?(starting,ending)
 
 #This next code extracts teh abstraction so that we can use this same code with Vehicles and Mechanics
 
+=begin
 module Schedulable
 	attr_writer :schedule
 
@@ -1543,7 +1544,7 @@ m.schedulable?(starting,ending)
 
 mtnbike = MountainBike.new
 mtnbike.schedulable?(starting,ending)
-
+=end
 # It is also possible to add a modules methods to a single object, using the extend keyword. Page 300 of 623 shows a diagram of te hierarchy.
 
 # Writing Inheritable Code.
@@ -1578,4 +1579,104 @@ mtnbike.schedulable?(starting,ending)
 			# an objects depth is the number of superclasses between it and the top.
 			# its breadth is the number of its direct subclasses.
 			# Shallow, Narrow Hierarchies are easy to understand. pg 308 of 623 has a diagram
-			
+
+# Chapter 8 Combining Objects With Composition
+	# Composition is the act of combining distinct parts into a complex whole such that the whole becomes more than the sum of its parts.
+	# Music is composed.
+
+
+# Bicycle is now responsible for three things. Knowing its size, holding on to its parts, and answer its spares.
+#pg 317 has diagram.
+class Bicycle
+	attr_reader :size, :parts
+
+	def initialize(args={})
+		@size = args[:size]
+		@parts = args[:parts]
+	end
+
+	def spares 
+		parts.spares
+	end
+end
+
+class Parts
+	attr_reader :chain, :tire_size
+
+	def initialize(args={})
+		@chain = args[:chain] || default_chain
+		@tire_size = args[:tire_size] || default_tire_size
+		post_initialize(args)
+	end
+
+	def spares
+		{ tire_size: tire_size,
+			chain: chain }.merge(local_spares)
+	end
+
+	def default_tire_size
+		raise NotImplementedError
+	end
+
+	#subclasses may override
+	def post_initialize(args)
+		nil
+	end
+
+	def local_spares
+		{}
+	end
+
+	def default_chain
+		'10-speed'
+	end
+
+end
+class RoadBikeParts < Parts
+	attr_reader  :tape_color
+
+	def post_initialize(args)
+		@tape_color = args[:tape_color]
+	end
+
+	def default_tire_size 
+		'23'
+	end
+	
+	def local_spares
+	      {tape_color: tape_color}
+	end
+end
+
+class MountainBikeParts < Parts
+	attr_reader :front_shock, :rear_shock
+
+	def post_initialize(args)
+		@front_shock = args[:front_shock]
+		@rear_shock = args[:rear_shock]
+	end
+
+	def default_tire_size
+		'2.1'
+	end
+
+	def local_spares
+		{rear_shock: rear_shock}
+	end
+end
+
+road_bike = Bicycle.new(
+	size: "L",
+	parts: RoadBikeParts.new(tape_color: "red"))
+p road_bike.spares
+
+mtnbike = Bicycle.new(
+	size: "m",
+	parts: MountainBikeParts.new(rear_shock: "Fox"))
+p mtnbike.spares
+
+
+
+
+
+
