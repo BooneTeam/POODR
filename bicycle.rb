@@ -1563,4 +1563,19 @@ mtnbike.schedulable?(starting,ending)
 			# sublclasses taht rais an exception lie "does not implement" come close to declaring they are not that thing.
 
 		# Honor the Contract
+			 # In order for a tyoe system to be sane, subtypes must be substitutable for their supertypes.
+
+		# Use the Template method Pattern
+			# seperate abstract from the concrete.
+			# abstract code defines the algorithms and the concrete inheritors of that abstraction contribute specializations
+			#by overriding these template methods.
+
+		# Preemtively Decouple Classes
+			# Avoid writing code that requires inheritors to send super. Instead use hook messages.
+			# Hooks solve problem of super, but only for adjacent levels of hierarchy.
+
+		# Create Shallow Hierarchies
+			# an objects depth is the number of superclasses between it and the top.
+			# its breadth is the number of its direct subclasses.
+			# Shallow, Narrow Hierarchies are easy to understand. pg 308 of 623 has a diagram
 			
