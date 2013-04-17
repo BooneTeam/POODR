@@ -2282,4 +2282,278 @@ class GearTest < MiniTest::Unit::TestCase
 end
 =end
 
+# creating test doubles
+
+#create a new DiameterDouble instead of wheel. This implements a version that returns a canned answer.  THis provides a dependable foundation to construct a test.
+# This decouples gear test from the wheel class.
+# The bad thing with this is that now the test will pass even if the interface is changed as the above example and the app will break.
+=begin	
+	class DiameterDouble
+		def diameter
+			10
+		end
+	end
+=end
 	# Testing Private Methods
+
+		# Sometimes the object under test sends messages to itself.
+			# messages sent to self invoke methods taht are defined in the receivers private interface.
+
+			#ommitting tests for private methods.
+			 	# Private methods are hidden inside object under test and their results cant be seen by others.
+			 		#these methods are invoked by public methods that already have tests. A bug in a private method can break the app but this will be exposed with an existing test.
+			 	#Private methods are unstable therefore unstable code may change forcing tests to change and that is a waste of time.
+
+			 	# Testing private methods can mislead others to use them thinking they are more stable than they are. Tests should hide private methods, not expose them.
+
+			 #Removing private methods from Class Under Test
+			 	# If you have many private methods it could be the core responsibilities of teh object and so make up its interface, but they could be unstable so tread carefully in extracting to a new public object.
+
+			 #Choosing to test a private method.
+			 	# be biased against writing private method tests but dont fear to do so if this would improve your lot. But it probably wont.
+
+	# Testing Outgoing Messages
+		#*Queries or Commands* are outgoing
+
+		# messages that have no side effects are known as query messages. 
+		# Nothing in the app other than gear_inches method cares that diameter gets sent. The diameter method has no side effects, and no other objects depend on its execution.
+			# in the same way tests should ignore messages sent to self, they also should ignore outgoing query messages. The Gear effects are hidden in gear. bc the overall app doesnt need
+			#this message to be sent, your tests need not care.
+		#Gears gear_inches method depends on the result that diameter returns but tests to prove the correctnes of diameter belong in wheel
+		#it is redundant to repeat the tests in gear. Gears only responsibility is to prove the gear_inches works and it can that by testing that gear_nches always returns the correct results.
+
+=begin
+class Gear
+	#...
+	def gear_inches
+		ratio * wheel.diameter
+	end
+end
+=end
+
+	# Proving Command Messages
+
+		#Sometimes it does matter that a message gets sent.
+			# Page 404 explains this in detail with the game where a person must change gears and then a message "changed" is sent to observer
+			# When a player changes gears the application will be correct only if gear sends changed to observer. Your tests must prove the message is sent.
+			# They should prove it but without making assertions about the results of the changed method. The responsibility for testing a messages return
+			#value lies with its receiver.
+			# you need a way to prove that gear sends changed to observer that does not force you to rely on checking what comes back when it does bc that is job of receiver.
+				# This is a Mock -  Tests of behavior, as opposed to test of State. Instead of assertions about returns they define an expectation that a message will be sent.
+				# Test below fulfills its reponsibilities and it does so without binding to how observer behaves.
+				# The test creates a mock that injects in place of observer and each test method tells mock to expect to receive the changed message and then verifies that it did.
+
+=begin
+	
+require "minitest/autorun"
+class Gear
+	attr_reader :chainring, :cog, :wheel, :observer
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@wheel = args[:wheel]
+		@observer = args[:observer]
+	end
+
+	def set_cog(new_cog)
+		@cog = new_cog
+		changed
+	end
+	
+	def set_chainring(new_chainring)
+		@chainring = new_chainring
+		changed
+	end
+
+	def changed 
+		observer.changed(chainring, cog)
+	end
+end
+
+class GearTest < MiniTest::Unit::TestCase
+
+	def setup
+		@observer = MiniTest::Mock.new
+		@gear = Gear.new(
+					chainring: 52,
+					cog: 		11,
+					observer: 	@observer)
+	end
+
+	def test_notifies_observers_when_cogs_change
+		@observer.expect(:changed, true, [52,27])
+		@gear.set_cog(27)
+		@observer.verify
+	end
+
+end
+
+=end
+
+
+
+	#Testing Duck Types
+=begin
+require "minitest/autorun"
+class Trip
+	attr_reader :bicycles, :customers, :vehicle
+
+	def prepare(preparers)
+		preparers.each { |preparer|
+			preparer.prepare_trip(self) }
+	end
+end
+
+#when every preparer is a Duck that respoonds to 'prepare_trip'
+
+class Mechanic 
+	def prepare_trip(trip)
+		trip.bicycles.each {|bicycle|
+			prepare_bicycle(bicycle) }
+	end
+end
+
+class TripCoordinator
+	def prepare_trip(trip)
+		buy_food(trip.customers)
+	end
+end
+
+class Driver 
+	def prepare_trip(trip)
+		vehicle = trip.vehicle
+		gas_up(vehicle)
+		fill_water_tank(vehicle)
+	end
+end
+
+# This module tests tests and documents the preparer interface
+# The module proves that @object responds to prepare_trip
+# Writing the interface test allows you to write the test once and reuse it for every object that plays that role.
+# it serves as documentation and as a test. It also raises the visibility of the role and makes it easy to prove that any newly created Preparer fulfills its obligations.
+# The test_implememts.. method tests an incoming message and belongs with the receiving objects tests whcich is why the module gets included in teh tests of each preparer.
+module PreparerInterfaceTest
+	def test_implements_the_preparer_interface
+		assert_respond_to(@object, :prepare_trip, msg ="#{self.class} did not respond to prepare_trip")# The message is kind of redundant as it already describes all you need.
+	end
+end
+
+# THis test uses the module to prove that Mechanic is a Prepare. It includes the module and proves a Mechanic during setup via @object variable.
+
+class MechanicTest < MiniTest::Unit::TestCase
+	include PreparerInterfaceTest
+
+	def setup
+		@mechanic = @object = Mechanic.new
+	end
+end
+
+class TripCoordinatorTest < MiniTest::Unit::TestCase
+	include PreparerInterfaceTest
+
+	def setup
+		@trip_coordinator = @object = TripCoordinator.new
+	end
+
+end
+
+class DriverTest < MiniTest::Unit::TestCase
+	include PreparerInterfaceTest
+
+	def setup
+		@driver = @object = Driver.new
+	end
+
+end
+
+# You also need to create a mock to prove that an outgoing message is sent from Trip after all receivers implement prepare_trip.
+# This goes back to using mocks!
+# bc Trip is the only preparable in the app so far the test lives directly in triptest. However, if more preparables come along this should be extracted
+#into a module as above and shared among the preparables. But not until the need arises.
+
+
+class TripTest < MiniTest::Unit::TestCase
+
+	def test_requests_trip_preparation
+		@preparer = MiniTest::Mock.new
+		@trip = Trip.new
+		@preparer.expect(:prepare_trip, nil, [@trip])
+
+		@trip.prepare([@preparer])
+		@preparer.verify
+	end
+end
+
+=end
+		
+
+		# Using Role Tests to Validate Doubles
+
+
+require 'minitest/autorun'
+class Wheel 
+	attr_reader :rim, :tire
+	
+	def initialize(rim,tire)
+		@rim = rim 
+		@tire = tire
+	end
+
+	def width
+		rim + (tire * 2)
+	end
+end
+
+class Gear 
+	attr_reader :chainring, :cog, :wheel
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@wheel = args[:wheel]
+	end
+
+	def gear_inches
+		ratio * wheel.diameter
+	end
+
+	def ratio
+		chainring / cog.to_f
+	end
+
+end
+
+class WheelTest < MiniTest::Unit::TestCase
+	def setup
+		@wheel = Wheel.new(26, 1.5)
+	end
+
+	def test_implements_the_diameterizable_interface
+		assert_respond_to(@wheel, :width)
+	end
+
+
+	def test_calculates_diameter
+	#create instance of wheel
+		wheel = Wheel.new(26,1.5)
+	#make assertions about wheel
+		assert_in_delta(29,
+				wheel.diameter,
+				0.01)
+	end
+end
+
+class GearTest < MiniTest::Unit::TestCase
+
+	def test_calculates_gear_inches
+		gear = Gear.new(
+				chainring: 52,
+				cog: 		11,
+				wheel: 		Wheel.new(26,1.5))
+
+		assert_in_delta(137.1,
+						gear.gear_inches,
+						0.01)
+	end
+end
+
+
