@@ -1587,6 +1587,8 @@ mtnbike.schedulable?(starting,ending)
 
 # Bicycle is now responsible for three things. Knowing its size, holding on to its parts, and answer its spares.
 #pg 317 has diagram.
+
+=begin
 class Bicycle
 	attr_reader :size, :parts
 
@@ -1675,8 +1677,609 @@ mtnbike = Bicycle.new(
 	parts: MountainBikeParts.new(rear_shock: "Fox"))
 p mtnbike.spares
 
+=end
+
+# Composing the parts object.
+
+	# the parts list contains a list of individual parts.
+	# This adds a class to represent a single part.
+	# communicating the parts/part objects.
+
+# Creating a Part.
+	# The bicycle holds one Parts object which in turn holds many Part objects.
+	# The new part class simplifies the existing Parts class, which now becomes a wrapper around an array of parts objects.
+	# Parts can filter its list of part objects and return the one that need spares. 
+
+=begin
+class Bicycle
+	attr_reader :size, :parts
+
+	def initialize(args={})
+		@size = args[:size]
+		@parts = args[:parts]
+	end
+
+	def spares 
+		parts.spares
+	end
+end
+
+class Parts
+	attr_reader :parts
+
+	def initialize(parts)
+		@parts = parts
+	end
+
+	def spares
+		parts.select { |part| part.needs_spare }
+	end
+end
+
+class Part
+	attr_reader :name, :description, :needs_spare
+
+	def initialize(args)
+		@names = args[:name]
+		@description = args[:description]
+		@needs_spare = args.fetch(:needs_spare, true)
+	end
+end
+
+chain = Part.new(name: "chain", description: "10-speed")
+road_tire = Part.new(name: "tire_size", description: "23", needs_spare: false)
+road_bike_parts = Parts.new([chain, road_tire])
+p road_bike_parts
+
+road_bike2 = Bicycle.new(
+	size: 'L',
+	parts: Parts.new([chain, road_tire]))
+p road_bike2.spares
+p road_bike2
+=end
+
+# The bad thing about this code is that  road_bike2.spares.size returns the size but road_bike.parts.size returns a nomethoderror
+# the 1st works because spares returns an array. The next fails because parts returns instance of Parts.
+# you could fix this by simply adding a size method which returns parts.size but this will make you want to keep making parts seem like an array and adding methods.
+# you could also just have 
+=begin 
+class Parts < Array
+	def spares
+		select { |parts| part.needs_spare }
+	end
+end
+=end
+# but this contains a hidden flaw. When parts subclasses array it inherits all of Arrays behavior
+# This includes behavior like + which adds two arrays and returns a third
+# After combining two arrays like combo = (mtnparts + rdparts) combo.size returns correct but now combo_parts.spares is not understood.
 
 
+# there is no perfect decision on which way to go. The next example is a middle ground between complexity and usability.
+# Sending + to this results in NoMethodError bit Parts now responds to size,each and all of enumerable and raises errors if treated as actual Array.
+
+=begin
+class Bicycle
+	attr_reader :size, :parts
+
+	def initialize(args={})
+		@size = args[:size]
+		@parts = args[:parts]
+	end
+
+	def spares 
+		parts.spares
+	end
+end
+
+require 'forwardable'
+class Parts
+	extend Forwardable
+	def_delegators :@parts, :size, :each
+	include Enumerable
+
+	def initialize(parts)
+		@parts = parts
+	end
+
+	def spares
+		select { |part| part.needs_spare }
+	end
+end
+
+class Part
+	attr_reader :name, :description, :needs_spare
+
+	def initialize(args)
+		@names = args[:name]
+		@description = args[:description]
+		@needs_spare = args.fetch(:needs_spare, true)
+	end
+end
+
+chain = Part.new(name: "chain", description: "10-speed")
+road_tire = Part.new(name: "tire_size", description: "23", needs_spare: false)
+mtn_bike = Bicycle.new(size: "l",
+	parts: Parts.new([chain, road_tire]))
+p mtn_bike.spares.size
+p mtn_bike.parts.size
+
+=end
+
+# Manufacturing Parts with Factories.
+
+	# Unlike a hash this s2-d array provides no structural info. However, you understand the structure and can encode your
+	#know how into a new object that manufactures parts.
+
+# This modules job is to take an array and manufacture a parts object. it creates part objects but in public its responsibility
+# is to create a parts.
+#This factory knows the structure of the config array.
+# Once you commit to keeping config in an array, you should ALWAYS create new parts objects using the factory.
+
+=begin
+class Bicycle
+	attr_reader :size, :parts
+
+	def initialize(args={})
+		@size = args[:size]
+		@parts = args[:parts]
+	end
+
+	def spares 
+		parts.spares
+	end
+end
+
+require 'forwardable'
+class Parts
+	extend Forwardable
+	def_delegators :@parts, :size, :each
+	include Enumerable
+
+	def initialize(parts)
+		@parts = parts
+	end
+
+	def spares
+		select { |part| part.needs_spare }
+	end
+end
+
+class Part
+	attr_reader :name, :description, :needs_spare
+
+	def initialize(args)
+		@names = args[:name]
+		@description = args[:description]
+		@needs_spare = args.fetch(:needs_spare, true)
+	end
+end
+
+module PartsFactory
+	
+	def self.build(config,
+						part_class = Part,
+						parts_class = Parts)
+	parts_class.new(
+		config.collect {|part_config| 
+			part_class.new(
+				name: 		part_config[0],
+				description: part_config[1],
+				needs_spare: part_config.fetch(2, true))})
+	end
+end
+road_config = 
+	[['chain', "10-speed"],
+		["tire_size", "23"],
+		["tape_color", "red"]]
+ road_parts = PartsFactory.build(road_config)
+p road_parts.part
 
 
+=end
 
+# THe Openstruct class is a lot like the Struct class that you've already seen. It provides a way to bundle
+#a number of attributes into an object. 
+# Struct takes position order initialization arguments
+# OpenStruct takes a hash for its initialization and the derives attributes from the Hash.
+#This code below is after refactoring to remove the part class.
+
+=begin
+class Bicycle
+	attr_reader :size, :parts
+
+	def initialize(args={})
+		@size = args[:size]
+		@parts = args[:parts]
+	end
+
+	def spares 
+		parts.spares
+	end
+end
+
+require 'forwardable'
+
+class Parts
+	extend Forwardable
+	def_delegators :@parts, :size, :each
+	include Enumerable
+
+	def initialize(parts)
+		@parts = parts
+	end
+
+	def spares
+		select { |part| part.needs_spare }
+	end
+end
+
+require 'ostruct'
+module PartsFactory
+	
+	def self.build(config,
+						parts_class = Parts)
+	parts_class.new(
+		config.collect {|part_config| 
+			create_part(part_config)})
+	end
+
+	def self.create_part(part_config)
+			OpenStruct.new(
+				name: 		part_config[0],
+				description: part_config[1],
+				needs_spare: part_config.fetch(2, true))
+	end
+end
+road_config = 
+	[['chain', "10-speed"],
+		["tire_size", "23"],
+		["tape_color", "red"]]
+ road_parts = PartsFactory.build(road_config)
+ # p road_parts.each { |x| p x}
+
+recumbent_config = 
+	[["chain", "9-speed"],
+	["tire_size", "28"],
+	["flag", "tall and orange",false]]
+
+recumbent_bike = 
+	Bicycle.new(
+		size: "L",
+		parts: PartsFactory.build(recumbent_config))
+p recumbent_bike.spares
+
+=end
+# Adding support for recumbent bikes took 19 new lines of code in Ch 6
+# This can now be accomplished in 3. Shown above
+
+# Delegation - When one object reveives a message and forwards it to another. This creates dependencies bc receiver must recognixe the message AND know where to send it
+# Composition - A composed object is made up of parts with which it expects to interact via well-defined interfaces.
+	# describes a "has-a" relationship. IE: meals have appetizers, univerities have departments, bikes have parts.
+	# meals,universities, and bikes are composed objects. Appetizers, depts, and parts are roles.
+	# This also means that the contained object (appetizer) has no life indpendent of its container.
+	# mealse have appetizers but when meal is eaten the appetizer is also gone.
+# Aggregation - Exactly like composition but the contained object has an independent life.
+# Universities have departments who in turn have professors.
+# it is reasonable to believe that if a Universities department dissapears, its professors continue to exist.
+# The university => dept relationship is a composition and the department => professor is aggregation.
+
+# The General Rules in Deciding BW Inheritance and Composition
+	# When faced with a problem that composition can solve you should be biased in using composition.
+	# If you cannot defend inheritance as a better solution use composition.
+
+	# Inheritance is better when its use provides high rewards for low risk. 
+
+# Accepting Consequences of Inheritance
+# Goals for Code: TRUE
+	# transparent, reasonable, usable, exemplary.
+
+#Inheritance excels at the 2nd, 3rd, and 4th goals
+=begin 
+	Methods defined near the top of inheritance hierarchies have widespread influence bc the height of the hierarchy acts as a lever that multiplies their effects
+	Changes made to these methods ripple down the inheritance tree.
+	big changes in behavior can be achieved via small amounts of code.
+	you can easily create new subclasses to accomodate new variants.
+
+	- if you do not create correctly modeled hierarchies you could be flipping the excel coin. 
+		New behavior may not fit or others will not want to use your code bc of all the dependencies.
+
+	Look at page 348 for more examples of why these are good and bad.
+
+# Consequences of Composition
+
+	pg 351 fore examples
+
+=end
+
+# Chapter 9. Designing Cost-Effective Tests
+	
+	# Poorly Designed Code is difficult to change
+	# Must be skilled at refactoring - improves the internal structure but does not alter external.
+	# Preserves Maximum flexiibility at minimum cost by putting of decisions for commitment until specific requirements arrive.
+
+	# Efficient test prove that altered code continues to begave correctly without raising overall costs. Good changes do not force rewrites of tests.
+	# Write tests that remind you of the story you once had. Remember that you will forget.
+	# Tests allow you to defer design decisions.
+	# Good design naturally progresses toward small independent objects that rely on abstractions. 
+	# Individual Abstractions make for clean code but also make the intent of the whole blurry. This is where the need for good tests come in.
+
+	# Tests expose design flaws
+	# it a test requires painful setup, the code expects too much context.
+	# if testing one object drags a bunch of others into the mix, the code has too many dependencies.
+	# If the test is hard to write, other objects will find the code difficult to reuse.
+
+	# You should write loosely coupled tests only for the things that matter.
+
+	# Most programmers write too many tests.
+	# Test everything once in the proper place.
+
+	# Willful ignorance of the internals of every other object is at the core of design.
+	# Tests should only test the stable things. IE: Usually only public interface
+
+	#Tests that make assertions about the values of messages return are tests of state.
+
+	#Some outgoing messages have no side effects and only matter to their senders. The sender cares about the result it gets back, but no other part of the 
+	#application cares if the message gets sent. Outgoing messages like this are knowns as Queries and they need not be tested by the 
+	#sending object. Query messages are part of the public interface of the reciever and should be tested by the receivers state.
+
+	# Some outgoing messages do have side effects. Such as file writting, db record saved, action taken by observer.
+	#These are commands and it is the respoonsibility of the sending object to prove they are properly sent. Proving a
+	#message gets sent is a test of behavior, not state, and involves assertions about the number of times and with what args it is sent.
+
+	##* Incoming messages should be tested for the state they return.
+	 #* Outgoing Command messages should be tested to ensure they get sent.
+	 #* Outgoing query messages should not be tested.
+	
+	#You should write tests first, whenever it makes sense to do so.
+	# writing first has a modicum of reusability built into an object from its inception.
+
+	# Lack of design skills for novices will make testing baffingly difficult but if they perservere they will at least have testable code.
+	#Tests are not a substitution for bad code!
+
+	# TDD VS BDD
+
+	#BDD - Takes an outside-in approach. Creating objects at the boundary of an app and working its way inward, mocking as necessary to supply
+	 #as-yet-unwritten objects. 
+
+	# TDD - Takes a inside-out approach, usually starting with tests of domain objects and then reusing these newly created domain objects in the tests of adjacent 
+		#layers of code.
+
+	# When testing think of your app as divided into two major categories. 
+		# First category contains the object your'e testing, referred to as object under test.
+		# Second category is everything else.
+		 	#The tests should know things about the first category, but be as ignorant as possible about the second.
+		 	# Think of it as the only info available during the test is that which can be gained from looking at the object under test.
+		 # once you find your specific object you will need to choose a tesing POV.
+
+	# Incoming messages make up an objects public interface, the face it presents to the world. 
+
+# The Next tests MiniTest
+
+#Here wheel responds to one incoming message. Diameter which is sent by Gear. Gear responds to two incoming messages. gear_inches and ratio.
+	# Incoming Messges ought to have dependants
+		# If you draw a table like the one on pg 378 and find a purported incoming message with no dependants you should biew it with suspicion.
+		#It's really not incoming at, its a speculative implementation that reeks of guessing about the future and anticipates things that dont exist.
+			# Do not test incoming messages with no dependants; delete it. Application are improved by eliminating code that is not actively begin used.
+
+	# Proving the Public Interface.
+		# Incoming messages are tested by making asseritns about the value, or state, that their invocation returns. 
+			# The first requriement is to prove that it returns the correct value in every possible situation.
+
+=begin
+
+require 'minitest/autorun'
+class Wheel 
+	attr_reader :rim, :tire
+	
+	def initialize(rim,tire)
+		@rim = rim 
+		@tire = tire
+	end
+
+	def diameter 
+		rim + (tire * 2)
+	end
+end
+
+class Gear 
+	attr_reader :chainring, :cog, :rim, :tire
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@rim = args[:rim]
+		@tire = args[:tire]
+	end
+	def gear_inches
+		ratio * Wheel.new(rim,tire).diameter
+	end
+
+	def ratio
+		chainring / cog.to_f
+	end
+
+end
+
+class WheelTest < MiniTest::Unit::TestCase
+
+	def test_calculates_diameter
+	#create instance of wheel
+		wheel = Wheel.new(26,1.5)
+	#make assertions about wheel
+		assert_in_delta(29,
+				wheel.diameter,
+				0.01)
+	end
+end
+#This gear teset looks like WheelTest but it has entanglement the diameter test didnt have. Gears implementation of gear_inches creates and uses another object, Wheel.
+#Gear and Wheel are coupled in teh code and the tests.
+# This exposes a risk of tigh coupling and can be fixed slightly as it was in ch 3.
+class GearTest < MiniTest::Unit::TestCase
+
+	def test_calculates_gear_inches
+		gear = Gear.new(
+				chainring: 52,
+				cog: 		11,
+				rim: 		26,
+				tire:    	1.5 )
+
+		assert_in_delta(137.1,
+						gear.gear_inches,
+						0.01)
+	end
+end
+
+=end
+
+=begin
+
+require 'minitest/autorun'
+class Wheel 
+	attr_reader :rim, :tire
+	
+	def initialize(rim,tire)
+		@rim = rim 
+		@tire = tire
+	end
+
+	def diameter 
+		rim + (tire * 2)
+	end
+end
+
+class Gear 
+	attr_reader :chainring, :cog, :wheel
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@wheel = args[:wheel]
+	end
+	# The change in making wheel understand diameter and not creating a 
+	#new wheel here no longer cares about the injected object it only expects to implement diameter.
+	# The diameter method is part of teh public interface of a role, that might be named diameterizable.
+	# Because gear is now decoupled from wheel you must inject an instance of diameterizable during every gear creation.
+	#the object in 'wheel' variable play the diameterizable role.
+	def gear_inches
+		ratio * wheel.diameter
+	end
+
+	def ratio
+		chainring / cog.to_f
+	end
+
+end
+
+class WheelTest < MiniTest::Unit::TestCase
+
+	def test_calculates_diameter
+	#create instance of wheel
+		wheel = Wheel.new(26,1.5)
+	#make assertions about wheel
+		assert_in_delta(29,
+				wheel.diameter,
+				0.01)
+	end
+end
+
+class GearTest < MiniTest::Unit::TestCase
+# a wheel instance is now injected into the test
+# using a wheel for the injected Diameterizable results in test code taht mirrors the application.
+# it is now obvious in the tests and the application, that gear is using wheel. the invisible coupling is now publicly exposed
+
+	def test_calculates_gear_inches
+		gear = Gear.new(
+				chainring: 52,
+				cog: 		11,
+				wheel: 		Wheel.new(26,1.5))
+
+		assert_in_delta(137.1,
+						gear.gear_inches,
+						0.01)
+	end
+end
+=end
+
+#The role of diameterizable is all in your head so no one else using this app can guide a future maintainer.
+# Structuring the test the way we have has a real advantage.
+# When the code in tests use teh same collaborating objects as the code in your app, the tests break when they should. This is invaluable
+# Imagine someone changes diameter methods name in Wheel to width and failed to update the name of the sent message in Gear. Gear still send diameter to its gear_inches method.
+# The tests now fail bc gear test injects an instance of wheel and wheel implements width by Gear sends diameter.
+
+
+=begin
+require 'minitest/autorun'
+class Wheel 
+	attr_reader :rim, :tire
+	
+	def initialize(rim,tire)
+		@rim = rim 
+		@tire = tire
+	end
+
+	def width
+		rim + (tire * 2)
+	end
+end
+
+class Gear 
+	attr_reader :chainring, :cog, :wheel
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@wheel = args[:wheel]
+	end
+	# The change in making wheel understand diameter and not creating a 
+	#new wheel here no longer cares about the injected object it only expects to implement diameter.
+	# The diameter method is part of teh public interface of a role, that might be named diameterizable.
+	# Because gear is now decoupled from wheel you must inject an instance of diameterizable during every gear creation.
+	#the object in 'wheel' variable play the diameterizable role.
+	def gear_inches
+		ratio * wheel.diameter
+	end
+
+	def ratio
+		chainring / cog.to_f
+	end
+
+end
+
+class WheelTest < MiniTest::Unit::TestCase
+
+	def test_calculates_diameter
+	#create instance of wheel
+		wheel = Wheel.new(26,1.5)
+	#make assertions about wheel
+		assert_in_delta(29,
+				wheel.diameter,
+				0.01)
+	end
+end
+
+class GearTest < MiniTest::Unit::TestCase
+# a wheel instance is now injected into the test
+# using a wheel for the injected Diameterizable results in test code taht mirrors the application.
+# it is now obvious in the tests and the application, taht gear is using wheel. the invisible coupling is now publicly exposed
+# page 388 has an example.
+# Diameterizable  is depended on by gear and implemented by wheel.
+
+# There are two places in the code where object depends on knowledge of Diameterizable's interface.
+	# Gear thinks taht it knows Diameterizables interface.(it believes it can send diameter to the injected object)
+	# The code that created the object to be injected believes that WHeel implements this interface; that is it expects Wheel to implement diameter.
+		# Now that diameterizable has changed there is a problem. Wheel has been updated to implement the new interface but gear expects the old one.
+
+	# The whole point of dependency injection is to allow you to sub different concrete classes without changing existing code. 
+
+	# Roles need tests of their own. 
+	def test_calculates_gear_inches
+		gear = Gear.new(
+				chainring: 52,
+				cog: 		11,
+				wheel: 		Wheel.new(26,1.5))
+
+		assert_in_delta(137.1,
+						gear.gear_inches,
+						0.01)
+	end
+end
+=end
+
+	# Testing Private Methods
