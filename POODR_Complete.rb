@@ -2746,13 +2746,13 @@ class BicycleTest < MiniTest::Unit::TestCase
 	end
 end
 
-class RoadBikeTest < MiniTest::Unit::TestCase
-	include BicycleInterfaceTest
-	include BicycleSubclassTest
-	def setup
-		@bike = @object = RoadBike.new
-	end
-end
+#class RoadBikeTest < MiniTest::Unit::TestCase
+#	include BicycleInterfaceTest
+#	include BicycleSubclassTest
+#	def setup
+#		@bike = @object = RoadBike.new
+#	end
+#end
 
 class MountainBikeTest < MiniTest::Unit::TestCase
 	include BicycleInterfaceTest
@@ -2767,4 +2767,89 @@ end
 
 # Testing Unique Behavior.
 
+ # This tests specializations supplied by individual subclasses. The section after moves the focus upward in the hierarchy and tests behavior that is unique to Bicycle.
+
+ # Testing Concrete Subclass Behavior
+
+ 	#Now is the time to write the absolute minimum number of tests. The only thing left to test are the specialization that RoadBike supplies.
+ 		# It's important to test these specs without embedding knowledge of the superclass in the test. 
+ 			# Roadbike implements local_spares and also responds to spares. The roadbike test should ensure that local_spares workds while maintaining deliberate igonrance about the existance
+ 			# of spares. The BikeInterfaceTest proves that RoadBike responds to spares and it is redundant to reference that method directly.
+ 			# the local_spares method, is clearly roadbikes responsibilty.
+
+ 			#to run this test comment out the same test above.
+
+ class RoadBikeTest < MiniTest::Unit::TestCase
+	include BicycleInterfaceTest
+	include BicycleSubclassTest
+	def setup
+		@bike = @object = RoadBike.new(tape_color: 'Red')
+	end
+
+	def test_puts_tape_color_in_local_spares
+		assert_equal 'Red', @bike.local_spares[:tape_color]
+	end
+end
+
+#Testing Abstract Superclass Behavior.
+	# Bicycle is an abstract superclass making it hard to create an instance of and it may not have all the behavior you need to make the test run.
+		# The design of bicycle helps
+			# B/c Bicycle used template methods to acquire concrete specializations you can stub the behavior that would normally be supplied by subclasses.
+				# you can manufacture a testable instance of Bicycle by creating a new subclass for use solely by this test.
+
+class StubbedBike < Bicycle
+	def default_tire_size
+		0
+	end
+
+	def local_spares
+		{saddle: 'painful'}
+	end
+end
+
+class BicycleTest < MiniTest::Unit::TestCase
+	include BicycleInterfaceTest
+
+	def setup
+		@bike = @object = Bicycle.new({tire_size: 0})
+		@stubbed_bike = StubbedBike.new
+	end
+
+	def test_forces_subclasses_to_implement_default_tire_size
+		assert_raises(NotImplementedError) {
+			@bike.default_tire_size}
+	end
+
+	def test_includes_local_spares_in_spares
+		assert_equal @stubbed_bike.spares,
+						{ tire_size: 0,
+						  chain: '10-speed',
+						  saddle: 'painful'}
+	end
+end
+
+# if you fear that StubbedBike will become obsolete and permit the test to pass when it should fail, the solution is close at hand.
+# 	There is already a common BicycleSubclassTest. Just as you used DiameterizableInterfaceTest to guarantee DiameterDoubles good behavior
+# 	you can use the subclass test to ensure the correctness of stubbedbike.
+
+class StubbedBikeTest < MiniTest::Unit::TestCase
+	include BicycleSubclassTest
+
+	def setup
+		@object = StubbedBike.new
+	end
+end
+
+# Carefully written inheritance hierarchies are easy to test. Write one shareable test for the overall interface and another
+# for the subclass responsibilities. Isolate responsibilities. Prevent knowledge of the superclass from leaking down into the subclass test
+
+# Use the Liskov Substitution Principle to your advantage. 
+# create new subclasses that are used exclusively for testing consider requiring these subclasses to pass your subclass responsibility test to ensure 
+# they don't accidentally become obsolete.
+
+
+#* Tests are indispensable. Well Designed apps are highly abstract and under constant pressure to evolve;
+	#without tests these apps can neither be understood nor safely changed. The best tests are loosely coupled to the underlying code
+	# and test everything once and in the proper place. They add value without increasing costs.
+	
 
