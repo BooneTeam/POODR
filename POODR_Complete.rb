@@ -2489,3 +2489,282 @@ end
 
 		# Using Role Tests to Validate Doubles
 
+=begin
+require 'minitest/autorun'
+class Wheel 
+	attr_reader :rim, :tire
+	
+	def initialize(rim,tire)
+		@rim = rim 
+		@tire = tire
+	end
+
+	def width
+		rim + (tire * 2)
+	end
+end
+
+class Gear 
+	attr_reader :chainring, :cog, :wheel
+	def initialize(args)
+		@chainring = args[:chainring]
+		@cog = args[:cog]
+		@wheel = args[:wheel]
+	end
+
+	def gear_inches
+		ratio * wheel.width
+	end
+
+	def ratio
+		chainring / cog.to_f
+	end
+
+end
+
+module DiameterizableInterfaceTest
+	def test_implements_the_diameterizable_interface
+		assert_respond_to(@object, :width)
+	end
+end
+
+
+
+class WheelTest < MiniTest::Unit::TestCase
+	# This is now the same thing after making a module
+	include DiameterizableInterfaceTest
+	
+	def setup
+		@wheel = @object = Wheel.new(26, 1.5)
+	end
+
+
+	#def test_implements_the_diameterizable_interface
+	#	assert_respond_to(@wheel, :width)
+	#end
+
+
+	def test_calculates_diameter
+	#create instance of wheel
+		wheel = Wheel.new(26,1.5)
+	#make assertions about wheel
+		assert_in_delta(29,
+				wheel.width,
+				0.01)
+	end
+end
+	#pg 420 has all the refactoring done and steps
+		# now that diameterdouble is being tested we can ensure that it honestly plays its role.
+		# The first failure which if the diameter double still had def diameter instead of width tells you that you need to change it to width as shown 
+		# It then gives you na undefined method "diameter" and tells you the line number that it is incorrect on which is in the gear_inches method
+class DiameterDouble
+	def width
+		10
+	end
+end
+class DiameterDoubleTest < MiniTest::Unit::TestCase
+	include DiameterizableInterfaceTest
+
+	def setup
+		@object = DiameterDouble.new
+	end
+end
+
+class GearTest < MiniTest::Unit::TestCase
+
+	def test_calculates_gear_inches
+		gear = Gear.new(
+				chainring: 52,
+				cog: 		11,
+				wheel: 		DiameterDouble.new(26,1.5))
+
+		assert_in_delta(47.27,
+						gear.gear_inches,
+						0.01)
+	end
+end
+
+=end
+
+
+# Testing Inherited Code
+  # subtypes should be substitutable for their supertypes
+# # Write a shared test for the common contract and include this test in every object.
+
+require 'minitest/autorun'
+class Bicycle 
+	attr_reader :size, :chain, :tire_size
+
+	def initialize(args={})
+		@size = args[:size]
+		@chain = args[:chain] || default_chain
+		@tire_size = args[:tire_size] || default_tire_size
+		post_initialize(args) #bicycle sends this and implements 
+	end
+	
+	def post_initialize(args)
+		nil
+	end
+
+	def spares
+		{ chain: chain,
+	      tire_size: tire_size }.merge(local_spares)
+	end
+	
+	
+	def local_spares
+		{}
+	end
+
+	def default_chain
+		'10-speed'
+	end
+
+	def default_tire_size
+		raise NotImplementedError,
+			"This #{self.class} cannot respond to:"
+	end
+end
+
+class RoadBike < Bicycle
+	attr_reader  :tape_color
+
+	def post_initialize(args)
+		@tape_color = args[:tape_color]
+	end
+
+	def default_tire_size 
+		'23'
+	end
+	
+	def local_spares
+	      {tape_color: tape_color}
+	end
+end
+
+class MountainBike < Bicycle
+	attr_reader :front_shock, :rear_shock
+
+	def post_initialize(args)
+		@front_shock = args[:front_shock]
+		@rear_shock = args[:rear_shock]
+	end
+
+	def default_tire_size
+		'2.1'
+	end
+
+	def local_spares
+		{rear_shock: rear_shock}
+	end
+end
+
+class RecumbentBike < Bicycle
+	attr_reader :flag
+
+	def post_initialize(args)
+		@flag = args[:flag]
+	end
+
+	def local_spares
+		{flag: flag}
+	end
+
+	def default_chain
+		'9-speed'
+	end
+
+	def default_tire_size
+		"28"
+	end
+end
+rdbike = RoadBike.new(
+	tape_color: "Red",
+	size: 'M')
+
+
+mtnbike = MountainBike.new(
+	front_shock: "Fox",
+	size: "L",
+	rear_shock: "Mongoose"
+	)
+
+
+rcmbike = RecumbentBike.new(flag: 'orange and pretty')
+
+module BicycleSubclassTest
+	def test_responds_to_post_initialize
+		assert_respond_to(@object, :post_initialize)
+	end
+
+	def test_responds_to_local_spares
+		assert_respond_to(@object, :local_spares)
+	end
+
+	def test_responds_to_default_tire_size
+		assert_respond_to(@object, :default_tire_size)
+	end
+end
+
+module BicycleInterfaceTest
+	def test_responds_to_default_tire_size
+		assert_respond_to(@object, :default_tire_size)
+	end
+
+	def test_responds_to_default_chain
+		assert_respond_to(@object, :default_chain)
+	end
+
+	def test_responds_to_chain
+		assert_respond_to(@object, :chain)
+	end
+
+	def test_responds_to_size
+		assert_respond_to(@object, :size)
+	end
+
+	def test_responds_to_tire_size
+		assert_respond_to(@object, :tire_size)
+	end
+
+	def test_responds_to_spares
+		assert_respond_to(@object, :spares)
+	end
+end
+
+#any object that passes the BicycleInterfaceTest can be trusted to act like a bicycle.
+#all classes in bicycle hierarchy must respond to this interface and should be able to pass this test.
+# Confirming Superclass Enforcement - The Bicycle class should raise an error if a subclass does not implement default_tire_size. Even
+# though this requirement applies to subclasses, the actual enforcement behavior is in Bicycle. THis test is placed directly in the bicycle class
+
+# The tire size argument is necessary because Bicycle is an abstract class that does not expect to receive the new message. Bicycle Doesn't have
+# a friendly creation tool. It doesnt need one though, because the application never creates an instance of Bicycle.
+class BicycleTest < MiniTest::Unit::TestCase
+	include BicycleInterfaceTest
+	def setup
+		@bike = @object = Bicycle.new({tire_size: 0})
+	end
+end
+
+class RoadBikeTest < MiniTest::Unit::TestCase
+	include BicycleInterfaceTest
+	include BicycleSubclassTest
+	def setup
+		@bike = @object = RoadBike.new
+	end
+end
+
+class MountainBikeTest < MiniTest::Unit::TestCase
+	include BicycleInterfaceTest
+
+	def setup 
+		@bike = @object = MountainBike.new
+	end
+
+end
+
+#Random test ordering is a feature of Minitest so dont be alarmed when they run out of order.
+
+# Testing Unique Behavior.
+
+
